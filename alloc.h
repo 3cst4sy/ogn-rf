@@ -16,13 +16,15 @@
 
     You should have received a copy of the GNU General Public License
     along with this software.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 #ifndef __ALLOC_H__
 #define __ALLOC_H__
 #include <stdlib.h>
 
 template<class Type>
- int Malloc(Type *&Data, size_t Size)
-{ Data = (Type *)malloc(Size*sizeof(Type)); return Data ? Size:0; }
+int Malloc(Type *&Data, size_t Size) {
+    Data = (Type *) malloc(Size * sizeof (Type));
+    return Data ? Size : 0;
+}
 
 #endif

@@ -16,7 +16,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this software.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -24,105 +24,140 @@
 #include <setjmp.h>
 #include <jpeglib.h>
 
-class JPEG
-{ private:
-   struct jpeg_compress_struct Compress;           // structures for jpeglib
-   struct jpeg_error_mgr       ErrorManager;
-   struct jpeg_destination_mgr DestinationManager;
-          jmp_buf              ErrorJmp;
+class JPEG {
+private:
+    struct jpeg_compress_struct Compress; // structures for jpeglib
+    struct jpeg_error_mgr ErrorManager;
+    struct jpeg_destination_mgr DestinationManager;
+    jmp_buf ErrorJmp;
 
-  public:
-   uint8_t *Data;                                 // compressed JPEG storage
-   size_t   Size;                                 // actuall JPEG size
-   uint32_t Valid;
+public:
+    uint8_t *Data; // compressed JPEG storage
+    size_t Size; // actuall JPEG size
+    uint32_t Valid;
 
-  private:
-   size_t Allocated;                             // allocated staorage
-   static const size_t AllocUnit = 8192;         // storage will be allocated in blocks
+private:
+    size_t Allocated; // allocated staorage
+    static const size_t AllocUnit = 8192; // storage will be allocated in blocks
 
-  public:
-   int Quality;                                  // JPEG quality: 0..100
+public:
+    int Quality; // JPEG quality: 0..100
 
-  private:
-   size_t Reallocate(size_t NewSize)            // reallocate JPEG storage to a new (bigger) size
-     { // printf("Reallocate(%d)\n", NewSize);
-       Data=(uint8_t *)realloc(Data, NewSize);
-       if(Data==0) { Allocated=0; Size=0; return 0; } // return zero if not possible to reallocate
-       return Allocated=NewSize; }
+private:
 
-   static void BufferInit_(jpeg_compress_struct *Compress)
-     { JPEG *Client = (JPEG *)Compress->client_data; Client->BufferInit(); }
+    size_t Reallocate(size_t NewSize) // reallocate JPEG storage to a new (bigger) size
+    { // printf("Reallocate(%d)\n", NewSize);
+        Data = (uint8_t *) realloc(Data, NewSize);
+        if (Data == 0) {
+            Allocated = 0;
+            Size = 0;
+            return 0;
+        } // return zero if not possible to reallocate
+        return Allocated = NewSize;
+    }
 
-          void BufferInit(void)
-     { if(Allocated<=0) Reallocate(AllocUnit);
-       DestinationManager.next_output_byte    = Data;
-       DestinationManager.free_in_buffer      = Allocated;
-       Size=0; }
+    static void BufferInit_(jpeg_compress_struct *Compress) {
+        JPEG *Client = (JPEG *) Compress->client_data;
+        Client->BufferInit();
+    }
 
-   static boolean BufferFull_(jpeg_compress_struct *Compress)
-     { JPEG *Client = (JPEG *)Compress->client_data; return Client->BufferFull(); }
+    void BufferInit(void) {
+        if (Allocated <= 0) Reallocate(AllocUnit);
+        DestinationManager.next_output_byte = Data;
+        DestinationManager.free_in_buffer = Allocated;
+        Size = 0;
+    }
 
-          boolean BufferFull(void)
-     { Size=Allocated;
-       if(Reallocate(Allocated+AllocUnit)<=0)
-       { longjmp(ErrorJmp, -1); return FALSE; }
-       DestinationManager.next_output_byte    = Data+Size;
-       DestinationManager.free_in_buffer      = Allocated-Size;
-       return TRUE; }
+    static boolean BufferFull_(jpeg_compress_struct *Compress) {
+        JPEG *Client = (JPEG *) Compress->client_data;
+        return Client->BufferFull();
+    }
 
-   static void BufferTerminate_(jpeg_compress_struct *Compress)
-     { JPEG *Client = (JPEG *)Compress->client_data; Client->BufferTerminate(); }
+    boolean BufferFull(void) {
+        Size = Allocated;
+        if (Reallocate(Allocated + AllocUnit) <= 0) {
+            longjmp(ErrorJmp, -1);
+            return FALSE;
+        }
+        DestinationManager.next_output_byte = Data + Size;
+        DestinationManager.free_in_buffer = Allocated - Size;
+        return TRUE;
+    }
 
-          void BufferTerminate(void)
-     { Size=Allocated-DestinationManager.free_in_buffer; }
+    static void BufferTerminate_(jpeg_compress_struct *Compress) {
+        JPEG *Client = (JPEG *) Compress->client_data;
+        Client->BufferTerminate();
+    }
 
-   int Compress_(uint8_t *Image, int Width, int Height,                      // compress Image
-                 J_COLOR_SPACE ColorSpace, int BytesPerPixel)
-     { Compress.image_width      = Width;
-       Compress.image_height     = Height;
-       Compress.input_components = BytesPerPixel;
-       Compress.in_color_space   = ColorSpace;
-       jpeg_set_defaults(&Compress);
-       jpeg_set_quality(&Compress, Quality, TRUE);
+    void BufferTerminate(void) {
+        Size = Allocated - DestinationManager.free_in_buffer;
+    }
 
-       jpeg_start_compress(&Compress, TRUE);
+    int Compress_(uint8_t *Image, int Width, int Height, // compress Image
+            J_COLOR_SPACE ColorSpace, int BytesPerPixel) {
+        Compress.image_width = Width;
+        Compress.image_height = Height;
+        Compress.input_components = BytesPerPixel;
+        Compress.in_color_space = ColorSpace;
+        jpeg_set_defaults(&Compress);
+        jpeg_set_quality(&Compress, Quality, TRUE);
 
-       int Row=0;
-       if(setjmp(ErrorJmp)) { jpeg_abort_compress(&Compress); Size=0; return -1; }
+        jpeg_start_compress(&Compress, TRUE);
 
-       for(Row=0; Row<Height; Row++, Image+=(Width*BytesPerPixel))
-       { jpeg_write_scanlines(&Compress, &Image, 1); }
+        int Row = 0;
+        if (setjmp(ErrorJmp)) {
+            jpeg_abort_compress(&Compress);
+            Size = 0;
+            return -1;
+        }
 
-       jpeg_finish_compress(&Compress);
-       return Size; }
+        for (Row = 0; Row < Height; Row++, Image += (Width * BytesPerPixel)) {
+            jpeg_write_scanlines(&Compress, &Image, 1);
+        }
 
-  public:
-   JPEG()
-     { Data=0; Allocated=0; Size=0;
-       Quality=80;
-       Compress.err = jpeg_std_error(&ErrorManager);
-       jpeg_create_compress(&Compress);
-       Compress.client_data = this;
-       Compress.dest = &DestinationManager;
-       DestinationManager.init_destination    = BufferInit_;        // call-backs
-       DestinationManager.empty_output_buffer = BufferFull_;
-       DestinationManager.term_destination    = BufferTerminate_;
-     }
+        jpeg_finish_compress(&Compress);
+        return Size;
+    }
 
-  ~JPEG()
-     { jpeg_destroy_compress(&Compress);
-       if(Data) free(Data); }
+public:
 
-   int Compress_MONO8(uint8_t *Image, int Width, int Height)        // compress a grey-scale image
-     { return Compress_(Image, Width, Height, JCS_GRAYSCALE, 1); }
+    JPEG() {
+        Data = 0;
+        Allocated = 0;
+        Size = 0;
+        Quality = 80;
+        Compress.err = jpeg_std_error(&ErrorManager);
+        jpeg_create_compress(&Compress);
+        Compress.client_data = this;
+        Compress.dest = &DestinationManager;
+        DestinationManager.init_destination = BufferInit_; // call-backs
+        DestinationManager.empty_output_buffer = BufferFull_;
+        DestinationManager.term_destination = BufferTerminate_;
+    }
 
-   int Compress_RGB24(uint8_t *Image, int Width, int Height)        // compress an RGB image
-     { return Compress_(Image, Width, Height, JCS_RGB, 3); }
+    ~JPEG() {
+        jpeg_destroy_compress(&Compress);
+        if (Data) free(Data);
+    }
 
-   int Write(char *FileName)                                        // write compressed JPEG image to a file
-     { if(Data==0) return 0;
-       FILE *File = fopen(FileName, "wb"); if(File==0) return 0;
-       size_t Written=fwrite(Data, 1, Size, File);
-       fclose(File); return Written; }
+    int Compress_MONO8(uint8_t *Image, int Width, int Height) // compress a grey-scale image
+    {
+        return Compress_(Image, Width, Height, JCS_GRAYSCALE, 1);
+    }
 
-} ;
+    int Compress_RGB24(uint8_t *Image, int Width, int Height) // compress an RGB image
+    {
+        return Compress_(Image, Width, Height, JCS_RGB, 3);
+    }
+
+    int Write(char *FileName) // write compressed JPEG image to a file
+    {
+        if (Data == 0) return 0;
+        FILE *File = fopen(FileName, "wb");
+        if (File == 0) return 0;
+        size_t Written = fwrite(Data, 1, Size, File);
+        fclose(File);
+        return Written;
+    }
+
+};

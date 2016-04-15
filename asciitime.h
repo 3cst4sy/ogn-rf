@@ -16,7 +16,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this software.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 #ifndef __ASCIITIME_H__
 #define __ASCIITIME_H__
 /*
@@ -56,5 +56,5 @@ int Format_HHMMSS(char *Str, time_t Time)
   uint32_t  MinH=Min /10; Str[2]='0'+MinH;  Str[3]='0'+(Min -10*MinH);
   uint32_t  SecH=Sec /10; Str[4]='0'+SecH;  Str[5]='0'+(Sec -10*SecH);
   return 6; }
-*/
+ */
 #endif
